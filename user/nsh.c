@@ -61,15 +61,80 @@ void throwerror(char* s);  //display s and exit
 
 struct cmd parsecmd(char* s);   //get executable command line from input stream
 
+void dispstr(char* s, char *e)
+{
+    while(s <= e){
+        fprintf(2, "%c", *s);
+        s++;
+    }
+    fprintf(2, "\n");
+}
+
+
+
+void runcmdunit(struct cmdunit* u)
+{
+
+    //redirection
+    if(u->iredir.isvalid){
+        close(u->iredir.fd);
+        if(open(u->iredir.file, u->iredir.mode) < 0){
+            fprintf(2, "open %s failed\n", u->iredir.file);
+            exit(-1);
+        }
+    }
+    if(u->oredir.isvalid){
+        close(u->oredir.fd);
+        if(open(u->oredir.file, u->oredir.mode) < 0){
+            fprintf(2, "open %s failed\n", u->oredir.file);
+            exit(-1);
+        }
+    }
+
+    //exec
+    if(u->argv[0] == 0)
+        exit(-1);
+    
+    exec(u->argv[0], u->argv);
+    fprintf(2, "exec %s failed\n", u->argv[0]);
+    exit(-1);
+}
+
 void runcmd(struct cmd cmd)
 /* execute cmd, and then exit 
     input: cmd to be executed
     output: none
 */
 {
-    fprintf(2, "cmdtype: %d\n", cmd.left.type);
-    fprintf(2, "iredir: %d\n", cmd.left.iredir.isvalid);
-    fprintf(2, "oredir: %d\n", cmd.left.oredir.isvalid);
+    int p[2];
+    if (cmd.ispipe == 0){
+        printf("no\n");
+        runcmdunit(&cmd.left);
+    }
+        
+    else{
+        pipe(p);        
+        if(myfork() == 0){
+            close(1);
+            dup(p[1]);
+            close(p[0]);
+            close(p[1]);
+            runcmdunit(&cmd.left);
+        }
+            
+        if(myfork() == 0){
+            close(0);
+            dup(p[0]);
+            close(p[0]);
+            close(p[1]);
+            runcmdunit(&cmd.right);
+        }
+        close(p[0]);
+        close(p[1]);
+        wait(0);
+        wait(0);
+    }
+    exit(0);
 }
 
 int readcmd(char* buf, int nbytes)
@@ -80,6 +145,8 @@ int readcmd(char* buf, int nbytes)
     gets(buf, nbytes);
     return !(buf[0] == 0);
 }
+
+
 
 int main(void)
 {
@@ -184,41 +251,6 @@ void parseunit(struct cmdunit* cmdunit, char **ps, char *es)
     cmdunit->type = EXEC;
     cmdunit->iredir.isvalid = 0;
     cmdunit->oredir.isvalid = 0;
-    // while(ifcontain(ps, es, "<>")){
-    //     cmdunit->type = REDIR;
-    //     tok = gettoken(ps, es, 0, 0);
-    //     if(gettoken(ps, es, &q, &eq) != 'a')
-    //         throwerror("missing file for redirection");
-    //     switch(tok){
-    //         case '<':
-    //             cmdunit->file = q;
-    //             cmdunit->efile = eq; 
-    //             cmdunit->mode = O_RDONLY;
-    //             cmdunit->fd = 0;
-    //             break;
-    //         case '>':
-    //             cmdunit->file = q;
-    //             cmdunit->efile = eq;
-    //             cmdunit->mode = O_WRONLY|O_CREATE; 
-    //             cmdunit->fd = 1;
-    //             break;
-    //     }
-    // }
-    // argc = 0;
-    // while(!ifcontain(ps, es, "|")){
-    //     if((tok=gettoken(ps, es, &q, &eq)) == 0)
-    //         break;
-    //     if(tok != 'a')
-    //         throwerror("syntax");
-    //     cmd->argv[argc] = q;
-    //     cmd->eargv[argc] = eq;
-    //     argc++;
-    //     if(argc >= MAXARGS)
-    //         throwerror("too many args");
-    //     ret = parseredirs(ret, ps, es);
-    // }
-    // cmd->argv[argc] = 0;
-    // cmd->eargv[argc] = 0;
 
     while(!ifcontain(ps, es, "|")){
         if((tok=gettoken(ps, es, &q, &eq)) == 0)
@@ -250,8 +282,11 @@ void parseunit(struct cmdunit* cmdunit, char **ps, char *es)
         cmdunit->argv[argc] = q;
         cmdunit->eargv[argc] = eq;
         argc++;
-        if(argc >= MAXARGS)
+        // printf("argc: %d\n",argc);
+        // dispstr(q, eq);
+        if(argc >= MAXARGS){
             throwerror("too many args");
+            }
         }
         else{
             throwerror("syntax error");
@@ -260,20 +295,53 @@ void parseunit(struct cmdunit* cmdunit, char **ps, char *es)
     cmdunit->argv[argc] = 0;
     cmdunit->eargv[argc] = 0;
 
+    //Null-terminate
+    int i;
+    for (i = 0; i < argc; i++)
+    {
+        *cmdunit->eargv[i] = 0;
+        //printf("%d: %s;%s\n ",i, cmdunit->argv[i], cmdunit->eargv[i]);
+    }
+    *cmdunit->iredir.efile = 0;
+    *cmdunit->oredir.efile = 0;
+
 }
 
 struct cmd parsecmd(char *s)
 {
-    char *es;  
+    char *es, *p;  
     struct cmd cmd;
     es = s + strlen(s); //end of string
     cmd.ispipe = 0;    //default
+    //dispstr(s,es);
 
     //not pipe
-    if(!ifcontain(&s, es, "|")){
-        cmd.left.type = EXEC;
+    if(!strchr(s, '|')){
         parseunit(&cmd.left, &s, es);
     }
-    return cmd;
 
+    else{
+        cmd.ispipe = 1;
+        p = s;
+        while(*p != '|')
+            ++p;
+        *p = 0;
+        p++;
+        //printf("p: %s\n",p);
+        if(p < es && strchr(p,'|')){
+            //printf("hey\n");
+            throwerror("only support single |");
+        }
+        // printf("%s\n", s);
+        // printf("%s\n", p);
+        struct cmdunit u1;
+        parseunit(&u1, &s, p-1);
+        cmd.left = u1;
+        struct cmdunit u2;
+        parseunit(&u2, &p, es);
+        cmd.right = u2;
+
+    }
+
+    return cmd;
 }
