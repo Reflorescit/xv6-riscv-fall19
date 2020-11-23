@@ -31,7 +31,7 @@ OBJS = \
   $K/virtio_disk.o \
   $K/buddy.o \
   $K/list.o \
-  $U/nsh.o \
+
   
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
@@ -146,6 +146,7 @@ UPROGS=\
 	$U/_mounttest\
 	$U/_crashtest\
 	$U/_alloctest\
+	$U/nsh\
 
 fs.img: mkfs/mkfs README user/xargstest.sh $(UPROGS)
 	mkfs/mkfs fs.img README user/xargstest.sh $(UPROGS)
