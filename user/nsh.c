@@ -21,13 +21,7 @@ char whitespace[] = " \t\r\n\v";
 char symbols[] = "<|>";
 
 
-//general data structure of cmd, could not be passed to exec() directly
-// struct cmd
-// {
-//     int cmd_type;
-
-// }
-
+//redirection
 struct redir
 {
     int isvalid;
@@ -41,12 +35,13 @@ struct redir
 struct cmdunit
 {
     int type;
-    char *argv[MAXARGS];
-    char *eargv[MAXARGS];
-    struct redir iredir;
-    struct redir oredir;
+    char *argv[MAXARGS];    //points at the head  of each argument
+    char *eargv[MAXARGS];   //points at the tail of each argument
+    struct redir iredir;    //input redirection
+    struct redir oredir;    //output redirection
 };
 
+//has left and right units if ispipe, else only has left unit
 struct cmd
 {
     int ispipe;
@@ -313,13 +308,12 @@ struct cmd parsecmd(char *s)
     struct cmd cmd;
     es = s + strlen(s); //end of string
     cmd.ispipe = 0;    //default
-    //dispstr(s,es);
 
     //not pipe
     if(!strchr(s, '|')){
         parseunit(&cmd.left, &s, es);
     }
-
+    //is pipe
     else{
         cmd.ispipe = 1;
         p = s;
@@ -327,20 +321,15 @@ struct cmd parsecmd(char *s)
             ++p;
         *p = 0;
         p++;
-        //printf("p: %s\n",p);
         if(p < es && strchr(p,'|')){
-            //printf("hey\n");
             throwerror("only support single |");
         }
-        // printf("%s\n", s);
-        // printf("%s\n", p);
         struct cmdunit u1;
         parseunit(&u1, &s, p-1);
         cmd.left = u1;
         struct cmdunit u2;
         parseunit(&u2, &p, es);
         cmd.right = u2;
-
     }
 
     return cmd;
