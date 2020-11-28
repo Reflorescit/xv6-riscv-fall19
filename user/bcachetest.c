@@ -148,6 +148,8 @@ void test1()
     if(pid == 0){
       if (i==0) {
         for (i = 0; i < N; i++) {
+          if(i%10 == 0)
+            printf("test i = %d running\n",i);
           readfile(file, BIG*BSIZE, BSIZE);
         }
         unlink(file);

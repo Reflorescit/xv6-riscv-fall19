@@ -79,6 +79,9 @@ void test1()
     if(pid == 0){
       close(fds[0]);
       for(i = 0; i < N; i++) {
+        if(i%1000 == 0){
+          printf("%dth test running\n", i);
+        }
         a = sbrk(PGSIZE);
         *(int *)(a+4) = 1;
         if (write(fds[1], "x", 1) != 1) {
@@ -95,6 +98,7 @@ void test1()
   int stop = 0;
   while (!stop) {
     stop = 1;
+    //printf("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
     for(int i = 0; i < NCHILD; i++){
       if (read(pipes[i], buf, 1) == 1) {
         tot += 1;
